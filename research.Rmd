@@ -1,0 +1,87 @@
+---
+title: "cellular gene expression and spatial relations"
+author: "Henry Raymond"
+date: "10/7/2020"
+output: html_document
+---
+
+
+```{r}
+mmc6 <- read.csv("~/Documents/research/mmc6.csv", header=FALSE)
+genesxycoordinates <- read.csv("~/Documents/research/genesxycoordinates.csv", header=FALSE)
+genes = length(genesxycoordinates$V1)
+remove.border.artifacts = matrix("numeric", nrow=genes, ncol=2)
+length.removed = length(genesxycoordinates[,1]) - length(remove.border.artifacts[,1])
+cells.removed = vector("numeric", length = length.removed)
+r = 1
+
+for(i in 1:genes){
+  if(genesxycoordinates$V1[i] >= 203 & genesxycoordinates$V1[i] <= 822 & genesxycoordinates$V2[i] >= 203 & genesxycoordinates$V2[i] <= 822){
+    remove.border.artifacts[i,1] = genesxycoordinates$V1[i]
+    remove.border.artifacts[i,2] = genesxycoordinates$V2[i]
+  } else{
+      cells.removed[r] = i
+      r = r + 1
+      #this will be used to remove cells (columns) in gene expression matrix
+    }
+   
+}
+rows = length(remove.border.artifacts[,1])
+length = length(remove.border.artifacts[remove.border.artifacts!="numeric"]) / 2
+no.border.artifacts = matrix("numeric", nrow=length, ncol=2)
+k = 1
+
+for(i in 1:rows){
+  if(remove.border.artifacts[i,1] != "numeric"){
+    no.border.artifacts[k,1] = remove.border.artifacts[i,1]
+    no.border.artifacts[k,2] = remove.border.artifacts[i,2]
+    k = k + 1
+  }
+}
+
+num = apply(no.border.artifacts, FUN = as.numeric, MARGIN = c(1,2))
+spatial.coordinates = t(num)
+
+
+gene.expression = na.omit(mmc6)
+expression.removed = gene.expression[,-cells.removed] #this is doing it correctly except the first cell is incorrectly removed
+#the first column of gene expression matrix is list of gene names so remove it
+gene.expression.fix = expression.removed[,-1]
+expression.svd = svd(gene.expression.fix)
+
+#trying to meaningfully represent svd data
+#plot summed relative expression in all cells for each gene
+relative.expression = vector("numeric", length = length(expression.svd$v[1,]))
+for(i in 1:length(expression.svd$v[1,])){
+  relative.expression[i] = sum(expression.svd$v[i,]) * expression.svd$d[i] #sum of each genes expression in all cells weighted by d value
+}
+plot(relative.expression~seq(1, 249), xlab = "Each Gene")
+abline(lm(relative.expression~seq(1, 249)))
+lm(relative.expression~seq(1, 249)) #slope is essentially zero, makes sense, gene expression of cells relative to one another sums to zero
+
+#take 10 most influential genes and plot the sum of each cells relative expression?
+#take most influential cells with relative expression above 1 and plot a genes expression? most influential negative too?
+
+#scree plot, relative variance
+#barplot(expression.svd$d[-1]^2) #removed first value as it is so much bigger
+barplot(expression.svd$d^2/sum(expression.svd$d^2))
+#s$u %*% D %*% t(s$v) #  X = U D V'
+D = diag(expression.svd$d)
+X = expression.svd$u %*% D %*% t(expression.svd$v) #output is X, approximation of matrix input into svd
+#La.svd(gene.expression.fix)
+#t(Vi) = Ui*di
+dim(expression.svd$v)
+dim(expression.svd$d)
+#plot(expression.svd$v[2,]~D[2]~expression.svd$v[1,]~D[1])
+plot(expression.svd$v[,1]*D[1,1],expression.svd$v[,2]*D[2,2])
+```
+
+```{r}
+only.spatial = genesxycoordinates[,-3]
+spatial.svd = svd(only.spatial)
+u.dataframe = data.frame(spatial.svd$u)
+ggplot(genesxycoordinates, aes(y = u.dataframe[,2], x = u.dataframe[,1])) +
+  geom_jitter(aes(col = genesxycoordinates[,3])) + ggtitle("Cell Coordinates SVD, Colored by Column 3") + xlab("X coordinate") + ylab("Y coordinate")
+
+```
+
